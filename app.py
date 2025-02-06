@@ -1,6 +1,7 @@
 import streamlit as st
 import os
 import random
+import re
 from dotenv import load_dotenv
 import base64
 import json
@@ -25,6 +26,166 @@ import plotly.graph_objects as go
 import numpy as np
 from scipy.io import wavfile
 import copy
+
+def calculate_pq_with_growth(resume_text, skills_matched, years_of_experience):
+    """
+    Calculate Potential Quotient (PQ) score with growth potential.
+    
+    Args:
+        resume_text (str): Full text of the resume
+        skills_matched (int): Number of matched skills
+        years_of_experience (int): Years of experience
+        
+    Returns:
+        dict: Dictionary containing PQ scores and analysis
+    """
+    # Base PQ calculation (40% of total score)
+    # Skills score (25%)
+    max_skills_score = 25
+    skills_score = min(max_skills_score, (skills_matched * 5))  # 5 points per skill, max 25
+    
+    # Experience score (15%)
+    max_exp_score = 15
+    exp_score = min(max_exp_score, (years_of_experience * 3))  # 3 points per year, max 15
+    
+    base_pq = skills_score + exp_score
+    
+    # Growth indicators (60% of total score)
+    growth_indicators = {
+        'continuous_learning': {
+            'weight': 20,  # 20%
+            'keywords': ['certification', 'course', 'training', 'workshop', 'learning',
+                        'studied', 'completed', 'achieved', 'earned']
+        },
+        'leadership': {
+            'weight': 15,  # 15%
+            'keywords': ['lead', 'manage', 'mentor', 'supervise', 'coordinate',
+                        'head', 'direct', 'guide', 'team']
+        },
+        'innovation': {
+            'weight': 15,  # 15%
+            'keywords': ['develop', 'create', 'design', 'implement', 'improve',
+                        'innovate', 'optimize', 'automate', 'research']
+        },
+        'adaptability': {
+            'weight': 10,  # 10%
+            'keywords': ['adapt', 'flexible', 'agile', 'dynamic', 'versatile',
+                        'quick learner', 'multitask', 'cross-functional']
+        }
+    }
+    
+    # Calculate weighted growth score
+    growth_score = 0
+    text_lower = resume_text.lower()
+    
+    for indicator, data in growth_indicators.items():
+        # Check how many keywords are present
+        keyword_matches = sum(1 for keyword in data['keywords'] if keyword in text_lower)
+        # Calculate score based on matches and weight
+        indicator_score = min(data['weight'], 
+                            (keyword_matches / len(data['keywords'])) * data['weight'])
+        growth_score += indicator_score
+    
+    # Final PQ score (base_pq + growth_score)
+    final_pq = round(base_pq + growth_score)
+    
+    # Generate insights
+    insights = []
+    if skills_score >= 20:
+        insights.append("Strong technical skill set with diverse capabilities")
+    elif skills_score >= 10:
+        insights.append("Good foundation of technical skills with room for growth")
+    
+    if exp_score >= 12:
+        insights.append("Extensive professional experience demonstrating long-term commitment")
+    elif exp_score >= 6:
+        insights.append("Solid work experience with proven track record")
+    
+    for indicator, data in growth_indicators.items():
+        keyword_matches = sum(1 for keyword in data['keywords'] if keyword in text_lower)
+        if keyword_matches >= len(data['keywords']) * 0.5:
+            if indicator == 'continuous_learning':
+                insights.append("Shows strong commitment to continuous learning and skill development")
+            elif indicator == 'leadership':
+                insights.append("Demonstrates leadership qualities and people management skills")
+            elif indicator == 'innovation':
+                insights.append("Exhibits innovative thinking and problem-solving abilities")
+            elif indicator == 'adaptability':
+                insights.append("Shows adaptability and flexibility in dynamic environments")
+    
+    return {
+        'pq_score': final_pq,
+        'base_score': base_pq,
+        'skills_score': skills_score,
+        'experience_score': exp_score,
+        'growth_score': growth_score,
+        'growth_indicators': {k: sum(1 for kw in v['keywords'] if kw in text_lower) 
+                            for k, v in growth_indicators.items()},
+        'insights': insights
+    }
+
+def calculate_risk_reward(pq_score, skills_matched, years_of_experience):
+    """
+    Calculate risk-reward analysis based on PQ score.
+    
+    Args:
+        pq_score (int): Potential Quotient (PQ) score
+        skills_matched (int): Number of matched skills
+        years_of_experience (int): Years of experience
+        
+    Returns:
+        dict: Dictionary containing risk-reward analysis
+    """
+    # Risk assessment
+    if pq_score < 50:
+        risk_level = "High"
+        risk_message = "High risk due to low PQ score. Focus on building skills and experience."
+    elif pq_score < 70:
+        risk_level = "Moderate"
+        risk_message = "Moderate risk. Continue to develop skills and gain experience."
+    else:
+        risk_level = "Low"
+        risk_message = "Low risk. Strong PQ score indicates good potential for growth."
+    
+    # Reward assessment
+    if skills_matched < 5:
+        reward_level = "Low"
+        reward_message = "Low reward potential due to limited skill match. Focus on acquiring relevant skills."
+    elif skills_matched < 10:
+        reward_level = "Moderate"
+        reward_message = "Moderate reward potential. Continue to develop skills and gain experience."
+    else:
+        reward_level = "High"
+        reward_message = "High reward potential. Strong skill match and experience indicate good growth prospects."
+    
+    # Recommendations
+    if risk_level == "High":
+        recommendations = [
+            "Focus on building a strong foundation in relevant skills",
+            "Gain practical experience through projects or internships",
+            "Develop a growth mindset and be open to learning"
+        ]
+    elif risk_level == "Moderate":
+        recommendations = [
+            "Continue to develop skills and gain experience",
+            "Focus on building a personal brand and online presence",
+            "Network with professionals in your desired field"
+        ]
+    else:
+        recommendations = [
+            "Leverage your strong PQ score to take on new challenges",
+            "Focus on building a strong professional network",
+            "Consider taking on leadership roles or mentoring others"
+        ]
+    
+    return {
+        'assessment': f"{risk_level} risk, {reward_level} reward potential",
+        'risk_level': risk_level,
+        'reward_level': reward_level,
+        'risk_message': risk_message,
+        'reward_message': reward_message,
+        'recommendations': recommendations
+    }
 
 # Load environment variables
 load_dotenv()
@@ -154,7 +315,7 @@ st.markdown("""
 st.sidebar.title("Navigation")
 selected_page = st.sidebar.selectbox(
     "Choose a feature",
-    ["Home", "Resume Builder", "Resume Analysis", "PDF Viewer", "Career Coach", "Interview Game", "Learning Playlist", "Time Dilation Training", "Chronological Arbitrage"]
+    ["Home", "Resume Builder", "Resume Analysis", "PDF Viewer", "Career Coach", "Interview Game", "Learning Playlist", "Time Dilation Training", "Chronological Arbitrage", "AI Interviewer"]
 )
 
 # Main content
@@ -811,10 +972,12 @@ elif selected_page == "Resume Analysis":
                     for skill in extracted_details['Skills']:
                         if skill != "Not Found":
                             st.write(f"  • {skill}")
-                    if extracted_details['Certifications'][0] != "Not Found":
+                    if extracted_details['Certifications'] and any(cert.strip() for cert in extracted_details['Certifications']):
                         st.write("📜 Certifications:")
                         for cert in extracted_details['Certifications']:
                             st.write(f"  • {cert}")
+                    else:
+                        st.write("📜 Certifications: None found")
             
             # PQ Score Tab
             with tab2:
@@ -823,12 +986,13 @@ elif selected_page == "Resume Analysis":
                 # Calculate metrics for PQ score
                 skills_matched = len([s for s in extracted_details['Skills'] if s != "Not Found"])
                 years_pattern = r"\b\d+\s+years?\b"
-                years_match = re.search(years_pattern, extracted_details['Experience'])
+                experience_text = ' '.join(extracted_details['Experience']) if isinstance(extracted_details['Experience'], list) else str(extracted_details['Experience'])
+                years_match = re.search(years_pattern, experience_text)
                 years_of_experience = int(years_match.group().split()[0]) if years_match else 1
                 
                 # Calculate PQ score
                 pq_results = calculate_pq_with_growth(resume_text, skills_matched, years_of_experience)
-                pq_score = pq_results["PQ Score"]
+                pq_score = pq_results["pq_score"]  # Changed from "PQ Score" to "pq_score"
                 risk_reward = calculate_risk_reward(pq_score, skills_matched, years_of_experience)
                 
                 # Display PQ score with a gauge chart
@@ -1694,22 +1858,28 @@ elif selected_page == "Interview Game":
     # Initialize session state for game
     if 'game_state' not in st.session_state:
         st.session_state.game_state = {
-            'current_mode': None,
+            'current_mode': 'Training',  # Set default mode
             'job_role': None,
-            'difficulty': None,
-            'company': None,
-            'current_question': 0,
-            'current_challenge': 0,
-            'score': 0,
-            'total_questions': 5,
-            'questions': None,
-            'scenario': None,
-            'debug': None,
-            'system_design': None,
-            'feedback': [],
-            'submitted': False
+            'difficulty': 'intermediate',
+            'challenge': None,
+            'submitted': False,
+            'feedback': None
         }
-    
+
+    # Ensure current_mode is always a string
+    current_mode = st.session_state.game_state.get('current_mode', 'Training')
+    if current_mode is None:
+        current_mode = 'Training'
+        st.session_state.game_state['current_mode'] = current_mode
+
+    # Display the mode in the format string
+    st.markdown("""
+        <div style='text-align: center; padding: 10px; background-color: #f0f2f6; border-radius: 5px; margin-bottom: 20px;'>
+            <h2 style='color: #0e1117;'>Current Mode: {}</h2>
+            <p style='color: #08090d; font-size: 1.1rem;'>Here you'll find curated learning resources and practice materials.</p>
+        </div>
+    """.format(current_mode.title()), unsafe_allow_html=True)
+
     # Interview game setup
     st.write("### Setup Your Interview Practice")
     
@@ -1770,18 +1940,18 @@ elif selected_page == "Interview Game":
             "icon": "🏗️",
             "description": "Design scalable systems and architectures. Great for senior roles and system design interviews."
         },
-        {
-            "mode": "coding",
-            "title": "Code Challenge",
-            "icon": "💻",
-            "description": "Solve coding problems with our integrated code editor, test cases, and real-time feedback."
-        },
-        {
-            "mode": "scenario",
-            "title": "Scenario Challenge",
-            "icon": "📋",
-            "description": "Practice responding to real-world scenarios and behavioral interview questions."
-        },
+        # {
+        #     "mode": "coding",
+        #     "title": "Code Challenge",
+        #     "icon": "💻",
+        #     "description": "Solve coding problems with our integrated code editor, test cases, and real-time feedback."
+        # },
+        # {
+        #     "mode": "scenario",
+        #     "title": "Scenario Challenge",
+        #     "icon": "📋",
+        #     "description": "Practice responding to real-world scenarios and behavioral interview questions."
+        # },
         {
             "mode": "practice_websites",
             "title": "Practice Websites",
@@ -1835,182 +2005,251 @@ elif selected_page == "Interview Game":
     
     # Game interface based on mode
     elif st.session_state.game_state['current_mode'] == "rapid_fire":
-        # Initialize rapid fire if not already done
-        if 'questions' not in st.session_state.game_state:
-            with st.spinner("Generating rapid-fire questions..."):
-                st.session_state.game_state['questions'] = interview_game.generate_rapid_fire(
-                    job_role=st.session_state.game_state['job_role'],
-                    difficulty=st.session_state.game_state.get('difficulty', 'intermediate')
-                )
-                st.session_state.game_state['current_question'] = 0
-                st.session_state.game_state['score'] = 0
-                st.session_state.game_state['submitted'] = False
+        # Initialize rapid fire state if not exists
+        if 'rapid_fire_state' not in st.session_state:
+            st.session_state.rapid_fire_state = {
+                'questions': [],
+                'current_question': 0,
+                'score': 0,
+                'submitted': False,
+                'completed': False,
+                'feedback': None
+            }
         
-        # Display questions
-        if st.session_state.game_state['questions']:
-            questions = st.session_state.game_state['questions']
-            current_q = st.session_state.game_state.get('current_question', 0)
+        # Generate questions if not already generated
+        if not st.session_state.rapid_fire_state['questions']:
+            with st.spinner("Generating rapid-fire questions..."):
+                st.session_state.rapid_fire_state['questions'] = interview_game.generate_rapid_fire(
+                    job_role=st.session_state.game_state['job_role'],
+                    difficulty=st.session_state.game_state['difficulty']
+                )
+
+        # Show completion screen if all questions are done
+        if st.session_state.rapid_fire_state['completed']:
+            total_score = st.session_state.rapid_fire_state['score']
+            score_percentage = (total_score / 500) * 100  # 5 questions, 100 points each
+            
+            st.balloons()
+            st.success(f"🎉 Rapid Fire completed!")
+            st.write(f"### Final Score: {total_score} points ({score_percentage:.1f}%)")
+            
+            # Performance message
+            if score_percentage >= 90:
+                st.write("🏆 Outstanding! Your rapid-fire skills are exceptional!")
+            elif score_percentage >= 70:
+                st.write("🌟 Great job! You have solid quick-thinking abilities!")
+            elif score_percentage >= 50:
+                st.write("👍 Good effort! Keep practicing to improve your speed and accuracy.")
+            else:
+                st.write("📚 Keep learning! Focus on quick recall of core concepts.")
+            
+            if st.button("Start New Rapid Fire"):
+                st.session_state.rapid_fire_state = {
+                    'questions': [],
+                    'current_question': 0,
+                    'score': 0,
+                    'submitted': False,
+                    'completed': False,
+                    'feedback': None
+                }
+                st.rerun()
+            st.stop()  # Use st.stop() instead of return
+
+        # Display current question
+        current_q = st.session_state.rapid_fire_state['current_question']
+        questions = st.session_state.rapid_fire_state['questions']
+        
+        if current_q < len(questions):
+            question = questions[current_q]
             
             # Show progress
-            progress = (current_q) / len(questions) * 100
-            st.progress(progress)
-            st.write(f"Question {current_q + 1} of {len(questions)}")
+            st.progress((current_q) / 5)
+            st.write(f"Question {current_q + 1} of 5")
+            st.write(f"### {question['question']}")
+            
+            # Time limit display
+            time_limit = 30  # seconds
+            st.write(f"⏱️ Time Limit: {time_limit} seconds")
+            
+            # Answer input
+            user_answer = st.text_input(
+                "Your Answer:",
+                key=f"rapid_q_{current_q}",
+                help=f"You have {time_limit} seconds to answer"
+            )
+
+            col1, col2 = st.columns([1, 1])
+            
+            # Handle answer submission
+            if not st.session_state.rapid_fire_state['submitted']:
+                if col1.button("Submit Answer", key=f"submit_{current_q}"):
+                    st.session_state.rapid_fire_state['submitted'] = True
+                    
+                    # Answer comparison with normalization
+                    answer_correct = False
+                    score = 0
+                    feedback = {}
+                    
+                    if user_answer and question.get('answer'):
+                        # Normalize both answers
+                        user_text = ' '.join(user_answer.strip().lower().split())
+                        correct_text = ' '.join(question['answer'].strip().lower().split())
+                        
+                        # Remove punctuation and special characters
+                        user_text = ''.join(c for c in user_text if c.isalnum() or c.isspace())
+                        correct_text = ''.join(c for c in correct_text if c.isalnum() or c.isspace())
+                        
+                        if user_text == correct_text:
+                            answer_correct = True
+                            score = 100
+                        else:
+                            # Split into words for partial matching
+                            user_words = set(user_text.split())
+                            correct_words = set(correct_text.split())
+                            matching_words = user_words & correct_words
+                            
+                            if len(matching_words) / len(correct_words) >= 0.75:
+                                answer_correct = True
+                                score = 75
+                            elif len(matching_words) / len(correct_words) >= 0.5:
+                                answer_correct = True
+                                score = 50
+                    
+                    # Store feedback
+                    feedback = {
+                        'correct': answer_correct,
+                        'score': score,
+                        'answer': question['answer'],
+                        'explanation': question.get('explanation', '')
+                    }
+                    st.session_state.rapid_fire_state['feedback'] = feedback
+                    st.session_state.rapid_fire_state['score'] += score
+                    st.rerun()
+            
+            # Show feedback if submitted
+            if st.session_state.rapid_fire_state['submitted'] and st.session_state.rapid_fire_state['feedback']:
+                feedback = st.session_state.rapid_fire_state['feedback']
+                
+                if feedback['correct']:
+                    st.success("🎯 Correct!")
+                else:
+                    st.error("❌ Not quite right")
+                
+                st.write(f"**Score:** {feedback['score']}/100")
+                st.write(f"**Correct Answer:** {feedback['answer']}")
+                if feedback['explanation']:
+                    st.write(f"**Explanation:** {feedback['explanation']}")
+                
+                # Next question button
+                if col2.button("Next Question", key=f"next_{current_q}"):
+                    st.session_state.rapid_fire_state['current_question'] += 1
+                    st.session_state.rapid_fire_state['submitted'] = False
+                    st.session_state.rapid_fire_state['feedback'] = None
+                    
+                    # Check if rapid fire is completed
+                    if st.session_state.rapid_fire_state['current_question'] >= 5:
+                        st.session_state.rapid_fire_state['completed'] = True
+                    
+                    st.rerun()
+    
+    elif st.session_state.game_state['current_mode'] == "quiz":
+        # Initialize quiz state if not exists
+        if 'quiz_state' not in st.session_state:
+            st.session_state.quiz_state = {
+                'questions': [],
+                'current_question': 0,
+                'score': 0,
+                'submitted': False,
+                'completed': False,
+                'answer_shown': False
+            }
+        
+        # Generate questions if not already generated
+        if not st.session_state.quiz_state['questions']:
+            with st.spinner("Generating quiz questions..."):
+                try:
+                    job_role = st.session_state.game_state.get('job_role')
+                    difficulty = st.session_state.game_state.get('difficulty')
+
+                    if not job_role or not difficulty:
+                        st.error("Please select your job role and difficulty level first.")
+                    else:
+                        questions = interview_game.generate_quiz_questions(
+                            job_role=job_role,
+                            difficulty=difficulty
+                        )
+                        
+                        if not isinstance(questions, list) or len(questions) < 5:
+                            st.error("Failed to generate valid quiz questions. Please try again.")
+                        else:
+                            st.session_state.quiz_state['questions'] = questions[:5]
+                except Exception as e:
+                    st.error(f"Error generating quiz questions: {str(e)}")
+
+        # Show quiz completion screen if all questions are done
+        if st.session_state.quiz_state['completed']:
+            score_percentage = (st.session_state.quiz_state['score'] / 5) * 100
+            st.success(f"🎉 Quiz completed! Your score: {score_percentage:.1f}% ({st.session_state.quiz_state['score']}/5 correct)")
+            
+            if st.button("Start New Quiz"):
+                st.session_state.quiz_state = {
+                    'questions': [],
+                    'current_question': 0,
+                    'score': 0,
+                    'submitted': False,
+                    'completed': False,
+                    'answer_shown': False
+                }
+                st.rerun()
+        
+        # Display current question
+        elif st.session_state.quiz_state['questions']:
+            current_q = st.session_state.quiz_state['current_question']
+            questions = st.session_state.quiz_state['questions']
             
             if current_q < len(questions):
                 question = questions[current_q]
                 
+                # Show progress
+                st.progress((current_q + 1) / 5)
+                st.write(f"Question {current_q + 1} of 5")
                 st.write(f"### {question['question']}")
                 
-                # Display timer
-                time_limit = question.get('time_limit', 30)
-                st.write(f"⏱️ Time Limit: {time_limit} seconds")
-                
-                # Answer input
-                user_answer = st.text_input(
-                    "Your Answer:",
-                    key=f"rapid_q_{current_q}",
-                    help=f"You have {time_limit} seconds to answer"
-                )
-                
-                if not st.session_state.game_state.get('submitted', False):
-                    if st.button("Submit Answer", key=f"submit_{current_q}"):
-                        st.session_state.game_state['submitted'] = True
-                        
-                        # Check answer
-                        result = interview_game.check_rapid_fire_answer(question, user_answer)
-                        
-                        if result:
-                            if result['correct']:
-                                st.success("🎯 Correct!")
-                                st.session_state.game_state['score'] += result['score']
-                            else:
-                                st.error("❌ Not quite right")
-                            
-                            st.write(f"**Score:** {result['score']:.1f}/100")
-                            st.write(f"**Correct Answer:** {result['correct_answer']}")
-                            st.write(f"**Explanation:** {result['explanation']}")
-                            
-                            if result.get('missing') and result['missing'].lower() not in ['none', 'n/a', '']:
-                                st.write(f"**What was missing:** {result['missing']}")
-                
-                # Next question button (only show after submitting)
-                if st.session_state.game_state.get('submitted', False):
-                    if st.button("Next Question", key=f"next_{current_q}"):
-                        st.session_state.game_state['current_question'] += 1
-                        st.session_state.game_state['submitted'] = False
-                        st.cache_data.clear()
-                        st.cache_resource.clear()
-            
-            else:
-                # All questions completed
-                st.success("🎉 Congratulations! You've completed all questions!")
-                final_score = st.session_state.game_state['score'] / len(questions) * 100
-                st.write(f"Final Score: {final_score:.2f}/100")
-                
-                # Display performance message
-                if final_score >= 90:
-                    st.write("🏆 Outstanding! Your rapid-fire skills are exceptional!")
-                elif final_score >= 70:
-                    st.write("🌟 Great job! You have solid quick-thinking abilities!")
-                elif final_score >= 50:
-                    st.write("👍 Good effort! Keep practicing to improve your speed and accuracy.")
-                else:
-                    st.write("📚 Keep learning! Focus on quick recall of core concepts.")
-                
-                if st.button("Try Another Round"):
-                    # Reset game state
-                    st.session_state.game_state = {
-                        'current_mode': None,
-                        'job_role': st.session_state.game_state['job_role'],
-                        'difficulty': st.session_state.game_state['difficulty']
-                    }
-                    st.cache_data.clear()
-                    st.cache_resource.clear()
-    
-    elif st.session_state.game_state['current_mode'] == "quiz":
-        if 'questions' not in st.session_state.game_state or not st.session_state.game_state['questions']:
-            with st.spinner("Generating quiz questions..."):
-                try:
-                    questions = interview_game.generate_quiz_questions(
-                        job_role=st.session_state.game_state['job_role'],
-                        difficulty=st.session_state.game_state['difficulty'],
-                        company=st.session_state.game_state.get('company')
+                # Handle answer submission
+                col1, col2 = st.columns([3, 1])
+                with col1:
+                    selected_option = st.radio(
+                        "Choose your answer:",
+                        options=question['options'],
+                        key=f"quiz_radio_{current_q}"
                     )
-                    if questions:
-                        st.session_state.game_state['questions'] = questions
-                        st.session_state.game_state['current_question'] = 0
-                        st.session_state.game_state['score'] = 0
-                        st.session_state.game_state['total_questions'] = len(questions)
-                        st.session_state.game_state['submitted'] = False
-                    else:
-                        st.error("Failed to generate quiz questions. Please try again.")
-                        st.session_state.game_state['current_mode'] = None
-                        st.rerun()
-                except Exception as e:
-                    st.error(f"Error generating quiz questions: {str(e)}")
-                    st.session_state.game_state['current_mode'] = None
-                    st.rerun()
-
-        if st.session_state.game_state.get('questions'):
-            current_q = st.session_state.game_state['current_question']
-            total_q = len(st.session_state.game_state['questions'])
-            
-            # Show progress
-            st.progress(current_q / total_q)
-            st.write(f"Question {current_q + 1} of {total_q}")
-            
-            if current_q < total_q:
-                question = st.session_state.game_state['questions'][current_q]
                 
-                st.write(f"### Question {current_q + 1}")
-                st.write(question['question'])
-                
-                # Display options
-                selected_option = st.radio(
-                    "Choose your answer:",
-                    question['options'],
-                    key=f"quiz_q_{current_q}"
-                )
-                
-                # Submit button
-                if not st.session_state.game_state.get('submitted', False):
-                    if st.button("Submit Answer", key=f"submit_q_{current_q}"):
-                        # Check answer
+                with col2:
+                    if st.button("Submit", key=f"submit_{current_q}") and not st.session_state.quiz_state['answer_shown']:
+                        st.session_state.quiz_state['submitted'] = True
+                        st.session_state.quiz_state['answer_shown'] = True
                         is_correct = selected_option == question['correct_answer']
+                        
                         if is_correct:
-                            st.success("✅ Correct!")
-                            st.session_state.game_state['score'] += 1
+                            st.success("🎯 Correct!")
+                            st.session_state.quiz_state['score'] += 1
                         else:
                             st.error("❌ Incorrect")
-                            st.info(f"Correct answer: {question['correct_answer']}")
                         
-                        st.write("**Explanation:**")
-                        st.write(question['explanation'])
+                        st.write(f"**Correct Answer:** {question['correct_answer']}")
+                        st.write(f"**Explanation:** {question['explanation']}")
+
+                # Show next button after submission
+                if st.session_state.quiz_state['answer_shown']:
+                    if st.button("Next Question", key=f"next_{current_q}"):
+                        st.session_state.quiz_state['current_question'] += 1
+                        st.session_state.quiz_state['submitted'] = False
+                        st.session_state.quiz_state['answer_shown'] = False
                         
-                        st.session_state.game_state['submitted'] = True
+                        if st.session_state.quiz_state['current_question'] >= 5:
+                            st.session_state.quiz_state['completed'] = True
+                        
                         st.rerun()
-                
-                elif st.session_state.game_state.get('submitted', False):
-                    if st.button("Next Question", key=f"next_q_{current_q}"):
-                        st.session_state.game_state['current_question'] += 1
-                        st.session_state.game_state['submitted'] = False
-                        st.rerun()
-            
-            else:
-                # Quiz completed
-                score = st.session_state.game_state['score']
-                total = total_q
-                percentage = (score / total) * 100
-                
-                st.success("🎉 Quiz Completed!")
-                st.write(f"### Your Score: {score}/{total} ({percentage:.1f}%)")
-                
-                if st.button("Start New Quiz"):
-                    st.session_state.game_state['questions'] = None
-                    st.session_state.game_state['current_question'] = 0
-                    st.session_state.game_state['score'] = 0
-                    st.session_state.game_state['submitted'] = False
-                    st.rerun()
     
     elif st.session_state.game_state['current_mode'] == "debug":
         # Initialize debug challenges if not already done
@@ -2103,8 +2342,7 @@ elif selected_page == "Interview Game":
                     if st.button("Next Challenge", key=f"next_debug_{current_c}"):
                         st.session_state.game_state['current_challenge'] += 1
                         st.session_state.game_state['submitted'] = False
-                        st.cache_data.clear()
-                        st.cache_resource.clear()
+                        st.rerun()
             
             else:
                 # All challenges completed
@@ -2129,133 +2367,206 @@ elif selected_page == "Interview Game":
                         'job_role': st.session_state.game_state['job_role'],
                         'difficulty': st.session_state.game_state['difficulty']
                     }
-                    st.cache_data.clear()
-                    st.cache_resource.clear()
+                    st.rerun()
     
     elif st.session_state.game_state['current_mode'] == "system_design":
-        if 'challenge' not in st.session_state.game_state:
+        if 'challenge' not in st.session_state.game_state or st.session_state.game_state['challenge'] is None:
             with st.spinner("Generating system design challenge..."):
-                st.session_state.game_state['challenge'] = interview_game.generate_system_design_challenge(
+                challenge = interview_game.generate_system_design_challenge(
                     job_role=st.session_state.game_state['job_role'],
                     difficulty=st.session_state.game_state.get('difficulty', 'intermediate')
                 )
+                
+                # If challenge generation failed, show error and return
+                if not challenge:
+                    st.error("Failed to generate system design challenge. Please try again.")
+                    if st.button("Retry"):
+                        st.session_state.game_state['challenge'] = None
+                        st.rerun()
+                    st.stop()  # Changed from return to st.stop()
+                # Store the challenge and initialize state
+                st.session_state.game_state['challenge'] = {
+                    'description': challenge.get('description', 'Design a scalable system...'),
+                    'requirements': challenge.get('requirements', [
+                        'Handle large scale data',
+                        'Ensure high availability',
+                        'Maintain data consistency',
+                        'Optimize for performance'
+                    ]),
+                    'constraints': challenge.get('constraints', [
+                        'Limited budget',
+                        'Must be scalable',
+                        'Must be secure'
+                    ]),
+                    'key_points': challenge.get('key_points', [
+                        'Load balancing',
+                        'Caching strategy',
+                        'Database design',
+                        'API design',
+                        'Monitoring and logging'
+                    ]),
+                    'solution': challenge.get('solution', """
+A comprehensive system design should include:
 
-        if st.session_state.game_state['challenge']:
-            challenge = st.session_state.game_state['challenge']
-            
-            # Display challenge
-            st.write("### 🏗️ System Design Challenge")
-            
-            # Display the challenge description
-            st.write("#### Problem Statement")
-            st.write(challenge['description'])
-            
-            # Display requirements
-            if 'requirements' in challenge:
-                st.write("#### 📋 Requirements")
-                for i, req in enumerate(challenge['requirements'], 1):
-                    st.write(f"{i}. {req}")
-            
-            # Display constraints
-            if 'constraints' in challenge:
-                st.write("#### 🔒 Constraints")
-                for i, con in enumerate(challenge['constraints'], 1):
-                    st.write(f"{i}. {con}")
-            
-            # Display evaluation criteria
-            if 'evaluation_criteria' in challenge:
-                with st.expander("📊 Evaluation Criteria"):
-                    for i, crit in enumerate(challenge['evaluation_criteria'], 1):
-                        st.write(f"{i}. {crit}")
-            
-            # Display time limit if specified
-            if 'time_limit' in challenge:
-                st.info(f"⏱️ Time Limit: {challenge['time_limit']} minutes")
-            
-            # Solution input area
-            st.write("### Your Solution")
-            user_solution = st.text_area(
-                "Describe your system design solution in detail. Consider all requirements and constraints.",
-                height=300
-            )
-            
-            # Submit button
-            if st.button("Submit Solution"):
-                if user_solution.strip():
-                    with st.spinner("Evaluating your solution..."):
-                        result = interview_game.evaluate_system_design_solution(challenge, user_solution)
-                        
-                        if result:
-                            # Display score and feedback
-                            score = float(result.get('score', 0))
-                            if score >= 80:
-                                st.success(f"🌟 Excellent! Score: {score}/100")
-                            elif score >= 60:
-                                st.warning(f"👍 Good attempt! Score: {score}/100")
-                            else:
-                                st.error(f"Score: {score}/100")
-                            
-                            # Display detailed feedback
-                            st.write("### 📝 Feedback")
-                            st.write(result.get('feedback', ''))
-                            
-                            # Display strengths
-                            if 'strengths' in result:
-                                with st.expander("💪 Strengths"):
-                                    for strength in result['strengths']:
-                                        st.write(f"• {strength}")
-                            
-                            # Display weaknesses
-                            with st.expander("🔍 Areas for Improvement"):
-                                for weakness in result['weaknesses']:
-                                    st.write(f"• {weakness}")
-                            
-                            # Display suggestions
-                            with st.expander("💡 Suggestions"):
-                                for suggestion in result['suggestions']:
-                                    st.write(f"• {suggestion}")
-                            
-                            # Try another button
-                            if st.button("Try Another Challenge"):
-                                st.session_state.game_state['challenge'] = interview_game.generate_system_design_challenge(
-                                    job_role=st.session_state.game_state['job_role'],
-                                    difficulty=st.session_state.game_state['difficulty']
-                                )
-                                st.cache_data.clear()
-                                st.cache_resource.clear()
+1. Architecture Overview:
+   - Load balancers for traffic distribution
+   - Multiple application servers for scalability
+   - Caching layer for performance
+   - Database layer with replication
+
+2. Components:
+   - Web/Application servers
+   - Cache servers (e.g., Redis)
+   - Database servers
+   - Load balancers
+   - CDN for static content
+
+3. Data Flow:
+   - How requests are processed
+   - How data is stored and retrieved
+   - Caching strategy
+
+4. Scalability:
+   - Horizontal scaling of servers
+   - Database sharding if needed
+   - Caching strategy
+
+5. Security:
+   - Authentication/Authorization
+   - Data encryption
+   - Rate limiting
+
+6. Monitoring:
+   - System metrics
+   - Error tracking
+   - Performance monitoring
+"""),
+                    'design_considerations': challenge.get('design_considerations', [
+                        'Consider using a CDN for static content delivery',
+                        'Implement proper caching strategies',
+                        'Design for fault tolerance',
+                        'Plan for future scaling',
+                        'Monitor system performance'
+                    ])
+                }
+                st.session_state.game_state['submitted'] = False
+                st.session_state.game_state['feedback'] = None
+
+        challenge = st.session_state.game_state['challenge']
+        
+        # Display challenge
+        st.write(f"### System Design Challenge")
+        st.write(challenge['description'])
+        
+        if challenge.get('requirements'):
+            st.write("#### Requirements:")
+            for req in challenge['requirements']:
+                st.write(f"- {req}")
+        
+        if challenge.get('constraints'):
+            st.write("#### Constraints:")
+            for constraint in challenge['constraints']:
+                st.write(f"- {constraint}")
+        
+        # Text area for solution
+        user_solution = st.text_area(
+            "Your Solution:",
+            height=300,
+            help="Describe your system design solution here. Include components, interactions, and considerations.",
+            key="system_design_solution"
+        )
+        
+        col1, col2 = st.columns([1, 1])
+        
+        # Submit solution
+        submit_clicked = col1.button("Submit Solution", key="submit_system_design")
+        if submit_clicked and user_solution:
+            if not st.session_state.game_state.get('submitted', False):
+                # Calculate feedback and score
+                feedback = {
+                    'solution': challenge['solution'],
+                    'key_points': challenge['key_points'],
+                    'considerations': challenge['design_considerations'],
+                    'score': 0
+                }
+                
+                # Calculate score based on key points mentioned
+                user_text = user_solution.lower()
+                matched_points = 0
+                total_points = len(feedback['key_points'])
+                
+                for point in feedback['key_points']:
+                    if point.lower() in user_text:
+                        matched_points += 1
+                
+                if total_points > 0:
+                    feedback['score'] = int((matched_points / total_points) * 100)
+                
+                st.session_state.game_state['submitted'] = True
+                st.session_state.game_state['user_solution'] = user_solution
+                st.session_state.game_state['feedback'] = feedback
+        
+        # Show error if submit clicked without solution
+        if submit_clicked and not user_solution:
+            st.error("Please provide a solution before submitting.")
+        
+        # Show feedback if solution is submitted
+        if st.session_state.game_state.get('submitted', False):
+            feedback = st.session_state.game_state.get('feedback')
+            if feedback:
+                st.write("---")
+                st.write("### Feedback")
+                
+                # Display the user's submitted solution
+                st.write("#### Your Submitted Solution:")
+                st.write(st.session_state.game_state['user_solution'])
+                
+                # Score and general feedback
+                score = feedback['score']
+                if score >= 80:
+                    st.success(f"🌟 Excellent solution! Score: {score}/100")
+                elif score >= 60:
+                    st.success(f"👍 Good solution! Score: {score}/100")
+                else:
+                    st.warning(f"Score: {score}/100 - Review the key points below to improve your solution")
+                
+                # Key points feedback
+                st.write("#### Key Points Coverage:")
+                user_text = st.session_state.game_state['user_solution'].lower()
+                for point in feedback['key_points']:
+                    if point.lower() in user_text:
+                        st.success(f"✅ {point}")
+                    else:
+                        st.error(f"❌ {point}")
+                
+                # Sample solution
+                with st.expander("View Sample Solution"):
+                    if feedback['solution']:
+                        st.write(feedback['solution'])
+                    else:
+                        st.write("""A good solution should consider:
+    1. System requirements and scale
+    2. Component architecture
+    3. Data flow and storage
+    4. Performance optimizations
+    5. Scalability considerations
+    6. Security measures
+    7. Monitoring and maintenance""")
+                
+                # Additional considerations
+                if feedback['considerations']:
+                    with st.expander("Additional Design Considerations"):
+                        for consideration in feedback['considerations']:
+                            st.write(f"- {consideration}")
+                
+                # Try another challenge button
+                if col2.button("Try Another Challenge", key="try_another_system_design"):
+                    st.session_state.game_state['challenge'] = None
+                    st.session_state.game_state['submitted'] = False
+                    st.session_state.game_state['feedback'] = None
+                    st.session_state.game_state['user_solution'] = None
+                    st.rerun()
     
-    # Display game instructions if no mode selected
-    if not st.session_state.game_state['current_mode']:
-        st.write("### 🎮 Game Modes")
-        st.write("""
-        1. **Quick Quiz Challenge 🎯**
-           - Multiple choice questions
-           - Test your technical knowledge
-           - Fun facts with each question
-        
-        2. **Real-world Scenario Solver 🌟**
-           - Tackle realistic business scenarios
-           - Practice problem-solving
-           - Get detailed feedback
-        
-        3. **Rapid Fire Round ⚡**
-           - Quick-thinking challenges
-           - 30-second time limit per question
-           - Test your instant recall
-        
-        4. **Debug Challenge 🐛**
-           - Find and fix bugs
-           - Real code examples
-           - Learn best practices
-        
-        5. **System Design Adventure 🏗️**
-           - Design scalable systems
-           - Consider real-world constraints
-           - Get architecture feedback
-        """)
-        
-        st.info("👆 Enter your job role and select a difficulty level to start!")
-
 elif selected_page == "Learning Playlist":
     st.title("Learning Playlist")
     st.info("🚧 Coming Soon! This feature is under development.")
@@ -3191,7 +3502,7 @@ elif selected_page == "Chronological Arbitrage":
             <h2 style='color: #64FFDA; font-size: 1.8rem;'>⚡ Training Session</h2>
             <p style='color: #B4C7ED; font-size: 1.1rem;'>Current Mode: {}</p>
         </div>
-        """.format(st.session_state.get('current_mode', 'Training').title()), unsafe_allow_html=True)
+        """.format(st.session_state.get('current_mode', 'Training Mode').title() if st.session_state.get('current_mode') else 'Training Mode'), unsafe_allow_html=True)
 
         progress = st.session_state.patterns_completed / st.session_state.total_patterns
         st.progress(progress)
@@ -3253,3 +3564,43 @@ elif selected_page == "Chronological Arbitrage":
                 if 'pattern_input' in st.session_state:
                     del st.session_state.pattern_input
                 st.rerun()
+
+elif selected_page == "Learning Playlist":
+    st.title("Learning Playlist")
+    st.info("🚧 Coming Soon! This feature is under development.")
+    
+    # Get current mode with a default value
+    current_mode = st.session_state.get('current_mode', 'Training') or 'Training'
+    st.markdown("""
+        <div style='text-align: center'>
+            <h2>Welcome to {} Mode</h2>
+            <p>Here you'll find curated learning resources and practice materials.</p>
+        </div>
+    """.format(current_mode.title()), unsafe_allow_html=True)
+
+
+elif selected_page == "AI Interviewer":
+    st.title("AI Interviewer")
+    st.markdown("""
+    <div style='text-align: center; padding: 20px;'>
+        <h2>Start Your Mock Interview</h2>
+        <p>Click the button below to begin your interactive AI-powered mock interview session.</p>
+        <div style='margin: 30px 0;'>
+            <a href='https://agents-playground.livekit.io/' target='_blank' style='
+                background-color: #FF4B4B;
+                color: white;
+                padding: 12px 24px;
+                text-decoration: none;
+                border-radius: 5px;
+                font-weight: bold;
+                display: inline-block;
+                transition: background-color 0.3s;
+                '>
+                Start Mock Interview
+            </a>
+        </div>
+        <p style='color: #666; font-size: 0.9em;'>
+            You will be redirected to our AI Interviewer platform where you can practice your interview skills with our advanced AI system.
+        </p>
+    </div>
+    """, unsafe_allow_html=True)
