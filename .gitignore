@@ -1,6 +1,6 @@
 # Ignore virtual environment
 venv/
-ai/Lib/
+venv/Lib/
 __pycache__/
 *.dll
 *.pyd
