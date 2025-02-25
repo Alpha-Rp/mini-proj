@@ -16,12 +16,12 @@ PyMuPDF==1.23.8
 Pillow==9.5.0  # Downgraded to be compatible with streamlit
 pyperclip
 keyboard==0.13.5
-scipy>=1.7.0
+scipy==1.7.0
 
 # Code Editor Requirements
-pygments>=2.15.1
+pygments
 jedi==0.17.2  # Downgraded to be compatible with python-language-server
 python-language-server==0.36.2
 docker==7.0.0  # For secure code execution
-pylint>=2.17.0  # For code analysis
-black>=23.3.0  # For code formatting
+pylint==2.17.0  # For code analysis
+black==23.3.0  # For code formatting
