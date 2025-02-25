@@ -21,3 +21,4 @@ scipy>=1.11.0  # Compatible with Python 3.12
 # Code Editor Requirements
 pygments==2.15.1
 python-lsp-server==1.7.0  # Replaces deprecated python-language-server
+black==23.3.0
