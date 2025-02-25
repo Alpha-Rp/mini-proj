@@ -13,19 +13,12 @@ pdfkit==1.0.0
 reportlab==4.0.7
 PyPDF2==3.0.1
 PyMuPDF==1.23.8
-Pillow==9.5.0  # Downgraded to be compatible with streamlit
-pyperclip
+Pillow==10.2.0  # Latest stable version
+pyperclip==1.8.2
 keyboard==0.13.5
-scipy==1.7.0
+scipy==1.11.4  # Updated for compatibility
 
-# Code Editor Requirements
+# Code Editor Requirements (Optional, remove if not needed)
 pygments==2.19.1
-jedi==0.17.2  # Downgraded to be compatible with python-language-server
-python-language-server==0.36.2
-docker==7.0.0  # For secure code execution
-pylint==2.17.0  # For code analysis
-black==23.3.0  # For code formatting
 
-markdown-it-py==3.0.0
 mdurl==0.1.2
-rich==13.9.4
