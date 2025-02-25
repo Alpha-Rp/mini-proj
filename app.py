@@ -315,36 +315,30 @@ st.markdown("""
 st.sidebar.title("Navigation")
 selected_page = st.sidebar.selectbox(
     "Choose a feature",
-    ["Home", "Resume Builder", "Resume Analysis", "PDF Viewer", "Career Coach", "Interview Game", "Learning Playlist", "Time Dilation Training", "Chronological Arbitrage", "AI Interviewer"]
+    ["Home","Time Dilation Training"]
 )
 
 # Main content
 if selected_page == "Home":
     st.title("Welcome to Future You Predictor")
     st.markdown("""
-    ### Your AI-Powered Career Growth Partner
+    ### Your AI-Powered Interview Preparation Partner
     
-    Welcome to Future You Predictor, your comprehensive career development platform. Here's what you can do:
+    Welcome to Future You Predictor, your comprehensive interview preparation platform. Here's what you can do:
     
-    #### 📝 Resume Builder
-    - Create ATS-friendly resumes
-    - Get AI-powered content optimization
-    - Professional formatting and templates
+ 
     
-    #### 📊 Resume Analysis
-    - Get detailed career insights
-    - Calculate your Potential Quotient (PQ)
-    - Receive personalized growth recommendations
+    #### 🌀 Time Dilation Training
+    - Train your mind to perceive and manage interview time better
+    - Practice with neural entrainment patterns
+    - Develop deep flow states for optimal performance
+    - Master time perception techniques for complex questions
     
-    #### 👨‍🏫 Career Coach
-    - Get personalized career guidance
-    - Set and achieve career goals
-    - Develop a growth mindset
     
-    #### 📚 Learning Playlist
-    - Access curated learning resources
-    - Track your progress
-    - Stay updated with industry trends
+    
+   
+    
+    Get started by selecting a feature from the navigation menu on the left!
     """)
 
 elif selected_page == "Resume Builder":
@@ -1858,12 +1852,46 @@ elif selected_page == "Interview Game":
     # Initialize session state for game
     if 'game_state' not in st.session_state:
         st.session_state.game_state = {
-            'current_mode': 'Training',  # Set default mode
+            'current_mode': None,
             'job_role': None,
-            'difficulty': 'intermediate',
-            'challenge': None,
+            'difficulty': None,
+            'company': None,
+            'current_question': 0,
+            'score': 0,
             'submitted': False,
             'feedback': None
+        }
+
+    # Initialize rapid fire state if not exists
+    if 'rapid_fire_state' not in st.session_state:
+        st.session_state.rapid_fire_state = {
+            'current_question': 0,
+            'score': 0,
+            'submitted': False,
+            'completed': False,
+            'answer_shown': False,
+            'questions': None,
+            'feedback': None
+        }
+
+    # Initialize debug state if not exists
+    if 'debug_state' not in st.session_state:
+        st.session_state.debug_state = {
+            'current_challenge': 0,
+            'score': 0,
+            'submitted': False,
+            'completed': False,
+            'challenges': None,
+            'feedback': None
+        }
+
+    # Initialize system design state if not exists
+    if 'system_design_state' not in st.session_state:
+        st.session_state.system_design_state = {
+            'challenge': None,
+            'submitted': False,
+            'feedback': None,
+            'user_solution': None
         }
 
     # Ensure current_mode is always a string
@@ -1977,11 +2005,19 @@ elif selected_page == "Interview Game":
             # Single button for each mode
             if st.button("Start Game", key=f"{mode['mode']}_button"):
                 if job_role:
-                    st.session_state.game_state['current_mode'] = mode['mode']
-                    st.session_state.game_state['job_role'] = job_role
-                    st.session_state.game_state['difficulty'] = difficulty
-                    st.session_state.game_state['company'] = company if company.strip() else None
-                    st.rerun()
+                    # Store the game configuration without rerunning
+                    st.session_state.game_state.update({
+                        'current_mode': mode['mode'],
+                        'job_role': job_role,
+                        'difficulty': difficulty,
+                        'company': company if company.strip() else None,
+                        'current_question': 0,
+                        'score': 0,
+                        'submitted': False,
+                        'feedback': None
+                    })
+                else:
+                    st.error("Please enter your target job role first!")
 
     # Handle practice websites mode
     if st.session_state.game_state.get('current_mode') == "practice_websites":
@@ -2005,24 +2041,24 @@ elif selected_page == "Interview Game":
     
     # Game interface based on mode
     elif st.session_state.game_state['current_mode'] == "rapid_fire":
-        # Initialize rapid fire state if not exists
-        if 'rapid_fire_state' not in st.session_state:
-            st.session_state.rapid_fire_state = {
-                'questions': [],
-                'current_question': 0,
-                'score': 0,
-                'submitted': False,
-                'completed': False,
-                'feedback': None
-            }
-        
-        # Generate questions if not already generated
-        if not st.session_state.rapid_fire_state['questions']:
-            with st.spinner("Generating rapid-fire questions..."):
-                st.session_state.rapid_fire_state['questions'] = interview_game.generate_rapid_fire(
-                    job_role=st.session_state.game_state['job_role'],
-                    difficulty=st.session_state.game_state['difficulty']
-                )
+        # Generate questions only if they haven't been generated yet
+        if st.session_state.rapid_fire_state['questions'] is None:
+            with st.spinner("Generating rapid fire questions..."):
+                try:
+                    questions = interview_game.generate_rapid_fire(  # Changed from generate_rapid_fire_questions
+                        job_role=st.session_state.game_state['job_role'],
+                        difficulty=st.session_state.game_state['difficulty']
+                    )
+                    if questions and len(questions) >= 5:
+                        st.session_state.rapid_fire_state['questions'] = questions[:5]
+                    else:
+                        st.error("Failed to generate questions. Please try again.")
+                        st.session_state.game_state['current_mode'] = None
+                        st.stop()
+                except Exception as e:
+                    st.error(f"Error generating questions: {str(e)}")
+                    st.session_state.game_state['current_mode'] = None
+                    st.stop()
 
         # Show completion screen if all questions are done
         if st.session_state.rapid_fire_state['completed']:
@@ -2045,11 +2081,12 @@ elif selected_page == "Interview Game":
             
             if st.button("Start New Rapid Fire"):
                 st.session_state.rapid_fire_state = {
-                    'questions': [],
                     'current_question': 0,
                     'score': 0,
                     'submitted': False,
                     'completed': False,
+                    'answer_shown': False,
+                    'questions': None,
                     'feedback': None
                 }
                 st.rerun()
@@ -2057,7 +2094,7 @@ elif selected_page == "Interview Game":
 
         # Display current question
         current_q = st.session_state.rapid_fire_state['current_question']
-        questions = st.session_state.rapid_fire_state['questions']
+        questions = st.session_state.rapid_fire_state['questions']  # Get questions from game_state
         
         if current_q < len(questions):
             question = questions[current_q]
@@ -2156,35 +2193,32 @@ elif selected_page == "Interview Game":
         # Initialize quiz state if not exists
         if 'quiz_state' not in st.session_state:
             st.session_state.quiz_state = {
-                'questions': [],
                 'current_question': 0,
                 'score': 0,
                 'submitted': False,
                 'completed': False,
-                'answer_shown': False
+                'answer_shown': False,
+                'questions': None  # Store questions here instead of game_state
             }
         
-        # Generate questions if not already generated
-        if not st.session_state.quiz_state['questions']:
+        # Generate questions only if they haven't been generated yet
+        if st.session_state.quiz_state['questions'] is None:
             with st.spinner("Generating quiz questions..."):
                 try:
-                    job_role = st.session_state.game_state.get('job_role')
-                    difficulty = st.session_state.game_state.get('difficulty')
-
-                    if not job_role or not difficulty:
-                        st.error("Please select your job role and difficulty level first.")
+                    questions = interview_game.generate_quiz_questions(
+                        job_role=st.session_state.game_state['job_role'],
+                        difficulty=st.session_state.game_state['difficulty']
+                    )
+                    if questions and len(questions) >= 5:
+                        st.session_state.quiz_state['questions'] = questions[:5]
                     else:
-                        questions = interview_game.generate_quiz_questions(
-                            job_role=job_role,
-                            difficulty=difficulty
-                        )
-                        
-                        if not isinstance(questions, list) or len(questions) < 5:
-                            st.error("Failed to generate valid quiz questions. Please try again.")
-                        else:
-                            st.session_state.quiz_state['questions'] = questions[:5]
+                        st.error("Failed to generate valid quiz questions. Please try again.")
+                        st.session_state.game_state['current_mode'] = None
+                        st.stop()
                 except Exception as e:
                     st.error(f"Error generating quiz questions: {str(e)}")
+                    st.session_state.game_state['current_mode'] = None
+                    st.stop()
 
         # Show quiz completion screen if all questions are done
         if st.session_state.quiz_state['completed']:
@@ -2192,18 +2226,20 @@ elif selected_page == "Interview Game":
             st.success(f"🎉 Quiz completed! Your score: {score_percentage:.1f}% ({st.session_state.quiz_state['score']}/5 correct)")
             
             if st.button("Start New Quiz"):
+                # Reset quiz state
                 st.session_state.quiz_state = {
-                    'questions': [],
                     'current_question': 0,
                     'score': 0,
                     'submitted': False,
                     'completed': False,
-                    'answer_shown': False
+                    'answer_shown': False,
+                    'questions': None
                 }
                 st.rerun()
-        
-        # Display current question
-        elif st.session_state.quiz_state['questions']:
+            st.stop()
+
+        # Display current question if questions exist
+        if st.session_state.quiz_state['questions'] is not None:
             current_q = st.session_state.quiz_state['current_question']
             questions = st.session_state.quiz_state['questions']
             
@@ -2224,20 +2260,20 @@ elif selected_page == "Interview Game":
                         key=f"quiz_radio_{current_q}"
                     )
                 
-                with col2:
-                    if st.button("Submit", key=f"submit_{current_q}") and not st.session_state.quiz_state['answer_shown']:
-                        st.session_state.quiz_state['submitted'] = True
-                        st.session_state.quiz_state['answer_shown'] = True
-                        is_correct = selected_option == question['correct_answer']
-                        
-                        if is_correct:
-                            st.success("🎯 Correct!")
-                            st.session_state.quiz_state['score'] += 1
-                        else:
-                            st.error("❌ Incorrect")
-                        
-                        st.write(f"**Correct Answer:** {question['correct_answer']}")
-                        st.write(f"**Explanation:** {question['explanation']}")
+                # Submit button
+                if col2.button("Submit", key=f"submit_{current_q}") and not st.session_state.quiz_state['answer_shown']:
+                    st.session_state.quiz_state['submitted'] = True
+                    st.session_state.quiz_state['answer_shown'] = True
+                    is_correct = selected_option == question['correct_answer']
+                    
+                    if is_correct:
+                        st.success("🎯 Correct!")
+                        st.session_state.quiz_state['score'] += 1
+                    else:
+                        st.error("❌ Incorrect")
+                    
+                    st.write(f"**Correct Answer:** {question['correct_answer']}")
+                    st.write(f"**Explanation:** {question['explanation']}")
 
                 # Show next button after submission
                 if st.session_state.quiz_state['answer_shown']:
@@ -2248,224 +2284,154 @@ elif selected_page == "Interview Game":
                         
                         if st.session_state.quiz_state['current_question'] >= 5:
                             st.session_state.quiz_state['completed'] = True
-                        
-                        st.rerun()
     
     elif st.session_state.game_state['current_mode'] == "debug":
-        # Initialize debug challenges if not already done
-        if 'debug' not in st.session_state.game_state:
+        # Generate challenges only if they haven't been generated yet
+        if st.session_state.debug_state['challenges'] is None:
             with st.spinner("Generating debug challenges..."):
-                debug_data = interview_game.generate_debug_challenges(
+                challenges = interview_game.generate_debug_challenges(
                     job_role=st.session_state.game_state['job_role'],
-                    difficulty=st.session_state.game_state.get('difficulty', 'intermediate')
+                    difficulty=st.session_state.game_state['difficulty']
                 )
-                if debug_data:
-                    st.session_state.game_state['debug'] = debug_data
-                    st.session_state.game_state['current_challenge'] = 0
-                    st.session_state.game_state['score'] = 0
-                    st.session_state.game_state['submitted'] = False
+                if challenges:
+                    st.session_state.debug_state['challenges'] = challenges
                 else:
-                    st.error("Failed to generate debug challenges. Please try again.")
+                    st.error("Failed to generate challenges. Please try again.")
                     st.session_state.game_state['current_mode'] = None
+                    st.stop()
+
+        # Show progress
+        st.progress((st.session_state.debug_state['current_challenge'] + 1) / 5)
+        st.write(f"Challenge {st.session_state.debug_state['current_challenge'] + 1} of 5")
         
-        if 'debug' in st.session_state.game_state and st.session_state.game_state['debug']:
-            current_c = st.session_state.game_state.get('current_challenge', 0)
-            challenges = st.session_state.game_state['debug']
+        if st.session_state.debug_state['current_challenge'] < 5 and st.session_state.debug_state['challenges']:
+            challenge = st.session_state.debug_state['challenges'][st.session_state.debug_state['current_challenge']]
             
-            # Show progress
-            st.progress((current_c) / 5)
-            st.write(f"Challenge {current_c + 1} of 5")
+            # Display challenge
+            st.write("### 🐛 Debug Challenge")
+            st.info(challenge['description'])
             
-            if current_c < 5 and current_c < len(challenges):
-                challenge = challenges[current_c]
-                
-                # Display challenge
-                st.write("### 🐛 Debug Challenge")
-                st.info(challenge['description'])
-                
-                # Display buggy code
-                st.code(challenge['buggy_code'], language='python')
-                
-                # Display hints in expander
-                with st.expander("🔍 Hints"):
-                    for hint in challenge['hints']:
-                        st.write(f"- {hint}")
-                
-                # Solution input
-                user_solution = st.text_area(
-                    "Enter your corrected code:",
-                    height=200,
-                    key=f"debug_solution_{current_c}"
-                )
-                
-                # Submit button
-                if not st.session_state.game_state.get('submitted', False):
-                    if st.button("Submit Fix", key=f"submit_debug_{current_c}"):
-                        st.session_state.game_state['submitted'] = True
+            # Display buggy code
+            st.code(challenge['buggy_code'], language='python')
+            
+            # Display hints in expander
+            with st.expander("🔍 Hints"):
+                for hint in challenge['hints']:
+                    st.write(f"- {hint}")
+            
+            # Solution input
+            user_solution = st.text_area(
+                "Enter your corrected code:",
+                height=200,
+                key=f"debug_solution_{st.session_state.debug_state['current_challenge']}"
+            )
+            
+            # Submit button
+            if not st.session_state.game_state.get('submitted', False):
+                if st.button("Submit Fix", key=f"submit_debug_{st.session_state.debug_state['current_challenge']}"):
+                    st.session_state.game_state['submitted'] = True
+                    
+                    # Evaluate solution
+                    result = interview_game.evaluate_debug_solution(challenge, user_solution)
+                    
+                    if result:
+                        # Display score and correctness
+                        score = float(result['score'])
+                        if result['is_correct']:
+                            st.success(f"🎯 Great Job! Score: {score}/100")
+                        else:
+                            st.warning(f"Almost there! Score: {score}/100")
                         
-                        # Evaluate solution
-                        result = interview_game.evaluate_debug_solution(challenge, user_solution)
+                        st.session_state.game_state['score'] += score
                         
-                        if result:
-                            # Display score and correctness
-                            score = float(result['score'])
-                            if result['is_correct']:
-                                st.success(f"🎯 Great Job! Score: {score}/100")
-                            else:
-                                st.warning(f"Almost there! Score: {score}/100")
-                            
-                            st.session_state.game_state['score'] += score
-                            
-                            # Display feedback
-                            st.write("### Feedback")
-                            st.write(result['feedback'])
-                            
-                            # Show the user's solution with syntax highlighting
-                            st.write("**Your Solution:**")
-                            st.code(user_solution, language='python')
-                            
-                            # Show correct solution if available
-                            if result.get('solution'):
-                                with st.expander("✨ View Solution"):
-                                    st.code(result['solution'], language='python')
-                                    if result.get('explanation'):
-                                        st.write("**Explanation:**")
-                                        st.write(result['explanation'])
-                            
-                            # Show best practices
-                            with st.expander("📚 Best Practices"):
-                                for practice in result['best_practices']:
-                                    st.write(f"- {practice}")
-                
-                # Next challenge button (only show after submitting)
-                if st.session_state.game_state.get('submitted', False):
-                    if st.button("Next Challenge", key=f"next_debug_{current_c}"):
-                        st.session_state.game_state['current_challenge'] += 1
-                        st.session_state.game_state['submitted'] = False
-                        st.rerun()
+                        # Display feedback
+                        st.write("### Feedback")
+                        st.write(result['feedback'])
+                        
+                        # Show the user's solution with syntax highlighting
+                        st.write("**Your Solution:**")
+                        st.code(user_solution, language='python')
+                        
+                        # Show correct solution if available
+                        if result.get('solution'):
+                            with st.expander("✨ View Solution"):
+                                st.code(result['solution'], language='python')
+                                if result.get('explanation'):
+                                    st.write("**Explanation:**")
+                                    st.write(result['explanation'])
+                        
+                        # Show best practices
+                        with st.expander("📚 Best Practices"):
+                            for practice in result['best_practices']:
+                                st.write(f"- {practice}")
             
-            else:
-                # All challenges completed
-                st.success("🎉 Congratulations! You've completed all debug challenges!")
-                final_score = st.session_state.game_state['score'] / 5  # Average score
-                st.write(f"Final Score: {final_score:.2f}/100")
-                
-                # Display performance message
-                if final_score >= 90:
-                    st.write("🏆 Outstanding! You show excellent debugging skills!")
-                elif final_score >= 70:
-                    st.write("🌟 Great job! You have a solid grasp of debugging principles!")
-                elif final_score >= 50:
-                    st.write("👍 Good effort! Keep practicing your debugging skills.")
-                else:
-                    st.write("📚 Keep learning! Focus on understanding error handling and code optimization.")
-                
-                if st.button("Play Again"):
-                    # Reset game state
-                    st.session_state.game_state = {
-                        'current_mode': None,
-                        'job_role': st.session_state.game_state['job_role'],
-                        'difficulty': st.session_state.game_state['difficulty']
-                    }
+            # Next challenge button (only show after submitting)
+            if st.session_state.game_state.get('submitted', False):
+                if st.button("Next Challenge", key=f"next_debug_{st.session_state.debug_state['current_challenge']}"):
+                    st.session_state.debug_state['current_challenge'] += 1
+                    st.session_state.game_state['submitted'] = False
                     st.rerun()
+        
+        else:
+            # All challenges completed
+            st.success("🎉 Congratulations! You've completed all debug challenges!")
+            final_score = st.session_state.game_state['score'] / 5  # Average score
+            st.write(f"Final Score: {final_score:.2f}/100")
+            
+            # Display performance message
+            if final_score >= 90:
+                st.write("🏆 Outstanding! You show excellent debugging skills!")
+            elif final_score >= 70:
+                st.write("🌟 Great job! You have a solid grasp of debugging principles!")
+            elif final_score >= 50:
+                st.write("👍 Good effort! Keep practicing your debugging skills.")
+            else:
+                st.write("📚 Keep learning! Focus on understanding error handling and code optimization.")
+            
+            if st.button("Play Again"):
+                # Reset game state
+                st.session_state.game_state = {
+                    'current_mode': None,
+                    'job_role': st.session_state.game_state['job_role'],
+                    'difficulty': st.session_state.game_state['difficulty']
+                }
+                st.session_state.debug_state = {
+                    'current_challenge': 0,
+                    'score': 0,
+                    'submitted': False,
+                    'completed': False,
+                    'challenges': None,
+                    'feedback': None
+                }
+                st.rerun()
     
     elif st.session_state.game_state['current_mode'] == "system_design":
-        if 'challenge' not in st.session_state.game_state or st.session_state.game_state['challenge'] is None:
+        # Generate challenge only if it hasn't been generated yet
+        if st.session_state.system_design_state['challenge'] is None:
             with st.spinner("Generating system design challenge..."):
                 challenge = interview_game.generate_system_design_challenge(
                     job_role=st.session_state.game_state['job_role'],
-                    difficulty=st.session_state.game_state.get('difficulty', 'intermediate')
+                    difficulty=st.session_state.game_state['difficulty']
                 )
-                
-                # If challenge generation failed, show error and return
-                if not challenge:
-                    st.error("Failed to generate system design challenge. Please try again.")
-                    if st.button("Retry"):
-                        st.session_state.game_state['challenge'] = None
-                        st.rerun()
-                    st.stop()  # Changed from return to st.stop()
-                # Store the challenge and initialize state
-                st.session_state.game_state['challenge'] = {
-                    'description': challenge.get('description', 'Design a scalable system...'),
-                    'requirements': challenge.get('requirements', [
-                        'Handle large scale data',
-                        'Ensure high availability',
-                        'Maintain data consistency',
-                        'Optimize for performance'
-                    ]),
-                    'constraints': challenge.get('constraints', [
-                        'Limited budget',
-                        'Must be scalable',
-                        'Must be secure'
-                    ]),
-                    'key_points': challenge.get('key_points', [
-                        'Load balancing',
-                        'Caching strategy',
-                        'Database design',
-                        'API design',
-                        'Monitoring and logging'
-                    ]),
-                    'solution': challenge.get('solution', """
-A comprehensive system design should include:
+                if challenge:
+                    st.session_state.system_design_state['challenge'] = challenge
+                else:
+                    st.error("Failed to generate challenge. Please try again.")
+                    st.session_state.game_state['current_mode'] = None
+                    st.stop()
 
-1. Architecture Overview:
-   - Load balancers for traffic distribution
-   - Multiple application servers for scalability
-   - Caching layer for performance
-   - Database layer with replication
-
-2. Components:
-   - Web/Application servers
-   - Cache servers (e.g., Redis)
-   - Database servers
-   - Load balancers
-   - CDN for static content
-
-3. Data Flow:
-   - How requests are processed
-   - How data is stored and retrieved
-   - Caching strategy
-
-4. Scalability:
-   - Horizontal scaling of servers
-   - Database sharding if needed
-   - Caching strategy
-
-5. Security:
-   - Authentication/Authorization
-   - Data encryption
-   - Rate limiting
-
-6. Monitoring:
-   - System metrics
-   - Error tracking
-   - Performance monitoring
-"""),
-                    'design_considerations': challenge.get('design_considerations', [
-                        'Consider using a CDN for static content delivery',
-                        'Implement proper caching strategies',
-                        'Design for fault tolerance',
-                        'Plan for future scaling',
-                        'Monitor system performance'
-                    ])
-                }
-                st.session_state.game_state['submitted'] = False
-                st.session_state.game_state['feedback'] = None
-
-        challenge = st.session_state.game_state['challenge']
-        
         # Display challenge
         st.write(f"### System Design Challenge")
-        st.write(challenge['description'])
+        st.write(st.session_state.system_design_state['challenge']['description'])
         
-        if challenge.get('requirements'):
+        if st.session_state.system_design_state['challenge'].get('requirements'):
             st.write("#### Requirements:")
-            for req in challenge['requirements']:
+            for req in st.session_state.system_design_state['challenge']['requirements']:
                 st.write(f"- {req}")
         
-        if challenge.get('constraints'):
+        if st.session_state.system_design_state['challenge'].get('constraints'):
             st.write("#### Constraints:")
-            for constraint in challenge['constraints']:
+            for constraint in st.session_state.system_design_state['challenge']['constraints']:
                 st.write(f"- {constraint}")
         
         # Text area for solution
@@ -2484,9 +2450,9 @@ A comprehensive system design should include:
             if not st.session_state.game_state.get('submitted', False):
                 # Calculate feedback and score
                 feedback = {
-                    'solution': challenge['solution'],
-                    'key_points': challenge['key_points'],
-                    'considerations': challenge['design_considerations'],
+                    'solution': st.session_state.system_design_state['challenge']['solution'],
+                    'key_points': st.session_state.system_design_state['challenge']['key_points'],
+                    'considerations': st.session_state.system_design_state['challenge']['design_considerations'],
                     'score': 0
                 }
                 
@@ -2561,10 +2527,11 @@ A comprehensive system design should include:
                 
                 # Try another challenge button
                 if col2.button("Try Another Challenge", key="try_another_system_design"):
-                    st.session_state.game_state['challenge'] = None
+                    st.session_state.game_state['current_mode'] = None
                     st.session_state.game_state['submitted'] = False
                     st.session_state.game_state['feedback'] = None
                     st.session_state.game_state['user_solution'] = None
+                    st.session_state.system_design_state['challenge'] = None
                     st.rerun()
     
 elif selected_page == "Learning Playlist":
@@ -3502,7 +3469,7 @@ elif selected_page == "Chronological Arbitrage":
             <h2 style='color: #64FFDA; font-size: 1.8rem;'>⚡ Training Session</h2>
             <p style='color: #B4C7ED; font-size: 1.1rem;'>Current Mode: {}</p>
         </div>
-        """.format(st.session_state.get('current_mode', 'Training Mode').title() if st.session_state.get('current_mode') else 'Training Mode'), unsafe_allow_html=True)
+        """.format(str(st.session_state.get('current_mode', 'Training')).title()), unsafe_allow_html=True)
 
         progress = st.session_state.patterns_completed / st.session_state.total_patterns
         st.progress(progress)
@@ -3570,7 +3537,7 @@ elif selected_page == "Learning Playlist":
     st.info("🚧 Coming Soon! This feature is under development.")
     
     # Get current mode with a default value
-    current_mode = st.session_state.get('current_mode', 'Training') or 'Training'
+    current_mode = str(st.session_state.get('current_mode', 'Training'))
     st.markdown("""
         <div style='text-align: center'>
             <h2>Welcome to {} Mode</h2>

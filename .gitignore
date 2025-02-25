@@ -1,6 +1,2 @@
-venv/
-__pycache__/
-*.pyc
-*.pyo
-ai/Lib/
+
 *.env
